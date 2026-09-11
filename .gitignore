@@ -1,0 +1,51 @@
+# --- Python ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# uv
+# uv.lock IS committed — the workspace lock is a reproducibility artifact and CI depends on it.
+.uv-cache/
+
+# --- Node -----------------------------------------------------------------------------
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+.vercel/
+
+# --- Environment / secrets ------------------------------------------------------------
+# R14: tokens never reach a log line. Nor do they reach version control.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Local infrastructure -------------------------------------------------------------
+# Docker volumes for Postgres and MinIO
+.docker-data/
+volumes/
+
+# --- Editors / OS ---------------------------------------------------------------------
+.DS_Store
+.idea/
+.vscode/
+!.vscode/settings.json
+
+# --- Build output that is nonetheless committed on purpose ----------------------------
+# packages/contracts/src/schema.d.ts is GENERATED but COMMITTED (AGENTS.md §6 rule 2). It is
+# deliberately absent from this file. CI regenerates it and fails if the committed copy differs;
+# ignoring it here would defeat that check entirely.
