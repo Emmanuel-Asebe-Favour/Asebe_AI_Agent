@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Global styles.
+ *
+ * README requires right-to-left layout support. Tailwind handles most of it through logical
+ * properties, but any hand-written rule here must use logical properties too (margin-inline-start,
+ * not margin-left) — physical properties silently break RTL, and the breakage is invisible to
+ * anyone testing only in a left-to-right locale.
+ */

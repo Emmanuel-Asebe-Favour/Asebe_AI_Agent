@@ -1,0 +1,30 @@
+{
+  "common": {
+    "appName": "Creator Publishing"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Your publishing activity at a glance.",
+    "create": "Create",
+    "content": "Content",
+    "calendar": "Calendar",
+    "analytics": "Analytics",
+    "platforms": "Platforms",
+    "notifications": "Notifications",
+    "help": "Help",
+    "feedback": "Feedback",
+    "settings": "Settings",
+    "administration": "Administration"
+  },
+  "status": {
+    "DRAFT": "Draft",
+    "SCHEDULED": "Scheduled",
+    "PUBLISHING": "Publishing",
+    "PUBLISHED": "Published",
+    "FAILED": "Failed",
+    "STATUS_UNKNOWN": "Status unknown",
+    "CANCELLED": "Cancelled",
+    "REQUIRES_AUTHENTICATION": "Requires reconnection",
+    "REQUIRES_USER_REVIEW": "Requires your review"
+  }
+}

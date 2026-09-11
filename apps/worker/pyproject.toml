@@ -1,0 +1,26 @@
+[project]
+name = "asebe-worker"
+version = "0.0.0"
+description = "Procrastinate consumer. Thin: registers tasks, calls domain logic."
+requires-python = ">=3.12,<3.13"
+
+# AGENTS.md §5: "apps/worker/ — Procrastinate consumer entrypoint. Thin — registers tasks, calls
+# domain."
+#
+# The word "thin" is doing real work. Scheduled publishing and immediate publishing must run
+# *identical* retry and verification logic (architecture.md §6); the only way to guarantee that is
+# for the worker to hold no publishing logic of its own and call into asebe_domain like the API
+# does. An `if` about retry eligibility in this package is a bug.
+dependencies = [
+    "asebe-domain",
+    "asebe-infrastructure",
+    "procrastinate>=2.9,<3",
+    "pydantic-settings>=2.6,<3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/asebe_worker"]

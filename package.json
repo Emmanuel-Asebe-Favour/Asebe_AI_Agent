@@ -1,0 +1,15 @@
+{
+  "name": "asebe",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Creator publishing platform. pnpm workspace root — scripts only, no runtime code.",
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "contracts:generate": "pnpm --filter @asebe/contracts generate",
+    "contracts:check": "pnpm --filter @asebe/contracts check",
+    "check": "pnpm contracts:check && pnpm --filter @asebe/web typecheck && pnpm --filter @asebe/web lint"
+  }
+}

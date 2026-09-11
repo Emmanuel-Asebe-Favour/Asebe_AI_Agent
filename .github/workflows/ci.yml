@@ -1,0 +1,98 @@
+name: CI
+
+# AGENTS.md §6 rule 4: "CI regenerates and fails if the committed output differs."
+#
+# This workflow is what makes several of the project's rules enforceable rather than aspirational.
+# Each job below names the rule it protects.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  domain:
+    name: Domain kernel (pure, no database)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install workspace
+        run: uv sync --all-packages
+
+      # AGENTS.md §9: "uv run pytest must pass". The domain kernel is framework-free and DB-free
+      # by design (architecture.md §6), so this job needs no services at all — if it ever needs a
+      # database, the §5 boundary has been broken.
+      - name: Tests
+        run: uv run pytest packages/domain/tests -v
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Type check
+        run: uv run mypy
+
+  contract:
+    name: Contract staleness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - run: uv sync --all-packages
+      - run: pnpm install --frozen-lockfile
+
+      # AGENTS.md §6: "CI regenerates and fails if the committed output differs."
+      #
+      # This is the check that makes the OpenAPI schema load-bearing. Without it, a Pydantic model
+      # can change without the frontend types changing, and the drift is discovered in production
+      # as a runtime shape mismatch that TypeScript cannot catch.
+      - name: Regenerate contract and fail on drift
+        run: pnpm contracts:check
+
+  web:
+    name: Frontend typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @asebe/web typecheck
+
+  # ---------------------------------------------------------------------------------------------
+  # Deliberately absent: any job involving PostgreSQL, MinIO, or the publishing end-to-end path.
+  #
+  # Those belong here and will be added with the persistence layer. They are omitted rather than
+  # stubbed because a job that runs but asserts nothing is worse than no job — it reports green
+  # while protecting nothing, which is the failure mode AGENTS.md §9 warns about.
+  #
+  # The end-to-end flows README requires (timeout → STATUS_UNKNOWN → no automatic retry → user
+  # review; temporary error → one safe retry; expired token → reconnect → review; unsupported
+  # format → blocked) are unit-tested in packages/domain/tests today. Their integration-level
+  # counterparts need infrastructure.
+  # ---------------------------------------------------------------------------------------------
