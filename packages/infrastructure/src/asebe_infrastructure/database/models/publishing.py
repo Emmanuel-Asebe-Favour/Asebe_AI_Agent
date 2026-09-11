@@ -34,6 +34,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from asebe_infrastructure.database.base import Base, Timestamps, UuidPrimaryKey
 
+# The nine statuses rendered as a SQL IN-list, derived from the enum rather than spelled out. A
+# literal list would be a second copy of status.py that nothing checks, and the failure mode it
+# invites is a constraint that silently rejects a newly added status. Defined at module scope
+# because ``__table_args__`` is evaluated at class-definition time.
+_STATUS_IN_LIST = ", ".join(f"'{status.value}'" for status in PublishingStatus)
+
 
 class ContentItem(UuidPrimaryKey, Timestamps, Base):
     """A piece of media plus its shared caption, before it is configured per platform.
@@ -76,6 +82,11 @@ class PlatformPost(UuidPrimaryKey, Timestamps, Base):
         # (docs/architecture.md §9). Without this index that sweep is a sequential scan of the
         # largest table in the schema.
         Index("ix_platform_posts_status_scheduled", "status", "scheduled_at_utc"),
+        # R8 says the state machine is the only place transition rules exist. That is only true if
+        # the column cannot hold a value the machine has never heard of, so the legal set is
+        # enforced here rather than assumed. Without this, `status` is a bare string and any value
+        # at all could be written into it.
+        CheckConstraint(f"status IN ({_STATUS_IN_LIST})", name="platform_posts_status_known"),
     )
 
     content_item_id: Mapped[uuid.UUID] = mapped_column(
@@ -92,10 +103,10 @@ class PlatformPost(UuidPrimaryKey, Timestamps, Base):
     platform_alt_text: Mapped[str | None] = mapped_column(Text)
 
     status: Mapped[PublishingStatus] = mapped_column(
-        # Stored as its string value, not a PostgreSQL enum type. A native enum makes adding a
-        # status a migration with a lock, and the statuses are expected to grow (docs/adr/0001
-        # proposes exactly that). A check constraint gives the same protection without the
-        # migration cost.
+        # Stored as its string value, not a PostgreSQL enum type. A native enum would make adding a
+        # status an `ALTER TYPE ... ADD VALUE`, which takes a lock and — historically — could not run
+        # inside a transaction block. The check constraint in __table_args__ gives the same
+        # protection for the cost of an ordinary constraint swap, which is cheaper to migrate.
         String(64), nullable=False, default=PublishingStatus.DRAFT
     )
 

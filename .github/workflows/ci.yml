@@ -33,6 +33,12 @@ jobs:
       - name: Lint
         run: uv run ruff check .
 
+      # Formatting is enforced rather than left to convention. AGENTS.md §3: "rules that depend on
+      # developer discipline decay". Hand-managing line length is precisely that kind of rule --
+      # every E501 in this codebase before this step existed was reflowed by hand.
+      - name: Format check
+        run: uv run ruff format --check .
+
       - name: Type check
         run: uv run mypy
 

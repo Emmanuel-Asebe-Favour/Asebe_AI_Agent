@@ -11,7 +11,7 @@
   },
   "scripts": {
     "generate": "node scripts/generate.mjs",
-    "check": "node scripts/generate.mjs && git diff --exit-code -- src/schema.d.ts"
+    "check": "node scripts/generate.mjs && git diff --exit-code -- src/schema.d.ts && git ls-files --error-unmatch src/schema.d.ts"
   },
   "devDependencies": {
     "openapi-typescript": "^7.4.0",
