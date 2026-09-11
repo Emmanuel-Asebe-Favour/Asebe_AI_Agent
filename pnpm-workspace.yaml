@@ -1,0 +1,9 @@
+# pnpm workspace definition.
+#
+# The Python side is a uv workspace (see pyproject.toml); this is the mirror for the TypeScript
+# side. The two are deliberately independent package managers over one repository, which is why
+# AGENTS.md §6 treats the OpenAPI schema — not a shared language — as the thing holding the
+# frontend and backend together.
+packages:
+  - "packages/contracts"
+  - "apps/web"

@@ -1,0 +1,30 @@
+[project]
+name = "asebe-api"
+version = "0.0.0"
+description = "FastAPI application. HTTP concerns only: parse, authorize, delegate, serialize."
+requires-python = ">=3.12,<3.13"
+
+# AGENTS.md §5 fixes what this layer may do:
+#   "apps/api/  FastAPI. HTTP concerns only: parse, authorize, delegate, serialize."
+#   "apps/api route handlers must never talk to the database directly. Route → domain service →
+#    repository."
+# It depends on infrastructure only to wire repositories behind domain protocols.
+dependencies = [
+    "asebe-domain",
+    "asebe-infrastructure",
+    "fastapi>=0.115,<1",
+    "pydantic-settings>=2.6,<3",
+    "uvicorn[standard]>=0.32,<1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/asebe_api"]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27",
+]
