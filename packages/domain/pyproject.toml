@@ -1,0 +1,27 @@
+[project]
+name = "asebe-domain"
+version = "0.0.0"
+description = "Pure business logic. Framework-free: no FastAPI, no SQLAlchemy, no httpx."
+requires-python = ">=3.12,<3.13"
+
+# --------------------------------------------------------------------------------------
+# This dependency list IS the enforcement of AGENTS.md §5's hard boundary:
+#
+#   "packages/domain must never import FastAPI, SQLAlchemy, or httpx directly. It defines
+#    protocols; packages/infrastructure implements them."
+#
+# The rule is enforced by the package manager, not by reviewer discipline. If someone adds
+# `import sqlalchemy` to the domain, it fails at import time because the package is not
+# installed here — and tests/test_boundaries.py catches it statically as well.
+#
+# Adding a dependency to this list is therefore an architectural change. pydantic is the
+# only permitted one: the domain's values need validation and frozen models.
+# --------------------------------------------------------------------------------------
+dependencies = ["pydantic>=2.9,<3"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/asebe_domain"]

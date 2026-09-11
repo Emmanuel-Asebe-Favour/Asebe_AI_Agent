@@ -1,0 +1,96 @@
+[project]
+name = "asebe-workspace"
+version = "0.0.0"
+description = "Creator publishing platform — uv workspace root. Owns dev tooling only; no runtime code."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    # The floor is the version the config below was actually verified against, not a guess at the
+    # oldest one that might work. It was originally written as `>=1.13`, which was wrong in a way
+    # worth naming: the `[tool.mypy]` block makes behavioural claims (that `assert_never` in
+    # retry_policy is narrowed to `Never` and therefore conflicts with `warn_unreachable`, that
+    # `disallow_any_explicit` is satisfied by the domain) and those claims were only ever checked
+    # under mypy 2.3.1. A floor below the verified version would let a different type checker
+    # install and re-litigate decisions this file records as settled.
+    "mypy>=2.3",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["apps/api", "apps/worker", "packages/domain", "packages/infrastructure"]
+
+[tool.uv.sources]
+asebe-domain = { workspace = true }
+asebe-infrastructure = { workspace = true }
+
+# --------------------------------------------------------------------------------------
+# Test configuration
+#
+# `testpaths` deliberately covers only the pure-Python packages. The reliability kernel in
+# packages/domain is framework-free and DB-free by design (AGENTS.md §5, architecture.md §6),
+# so these tests run without PostgreSQL. Anything under apps/ is excluded until Postgres is
+# available — see the integration marker below.
+# --------------------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["packages/domain/tests"]
+addopts = "-q --strict-markers --strict-config"
+asyncio_mode = "auto"
+markers = [
+    "integration: requires PostgreSQL; cannot run until the database layer is available",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["apps", "packages"]
+
+[tool.ruff.lint]
+# R13 ("no visible string is hardcoded", enforced by "lint rule + packages/contracts message keys")
+# is NOT enforced here yet. The rule becomes meaningful only once there is a UI string to hardcode;
+# adding a lint rule now would be theatre. It lands with apps/web in the increment that adds i18n.
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TID"]
+ignore = []
+
+[tool.ruff.lint.flake8-tidy-imports]
+# Mirrors AGENTS.md §5: no generic utils/helpers module. If you cannot name the responsibility,
+# you have not identified it yet.
+banned-module-level-imports = ["utils", "helpers", "common", "misc"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+# warn_unreachable is deliberately OFF, and the reason is specific to this codebase rather than a
+# general preference. retry_policy.decide() terminates its `match` with `case _: assert_never(...)`
+# to get static exhaustiveness over the PublishResult union (AGENTS.md §8 forbids a `default:` arm
+# that returns a decision). mypy narrows the value to Never in that arm, so warn_unreachable
+# reports the assert_never call itself as dead code. The two checks are in direct conflict, and
+# exhaustiveness is the one that protects the prime invariant — a newly added union member must be
+# a compile error, not a silent fallback.
+warn_unused_ignores = true
+show_error_codes = true
+# The Pydantic plugin is required, not optional. Without it mypy does not know that a frozen model
+# rejects attribute assignment, nor that a field with no default is required — so the `# type:
+# ignore[misc]` comments on the immutability tests become *unused*, and `warn_unused_ignores`
+# turns each of those into a build failure. It also catches missing constructor arguments, which is
+# what makes the R1 tests meaningful to a type checker rather than only at runtime.
+plugins = ["pydantic.mypy"]
+files = ["packages/domain/src", "packages/domain/tests"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[[tool.mypy.overrides]]
+# The domain must stay framework-free. If these become importable from asebe_domain, mypy
+# reports it rather than a reviewer having to notice.
+module = "asebe_domain.*"
+disallow_any_explicit = true
