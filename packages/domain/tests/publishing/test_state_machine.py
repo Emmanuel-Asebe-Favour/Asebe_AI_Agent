@@ -12,9 +12,9 @@ deliberately a *second, independent* encoding of the same rules: if the implemen
 state_machine.py were edited to match a mistaken reading of the README, a test that compared the
 table to itself would still pass. Comparing against a hand-copied literal does not.
 
-This file also pins the two spec gaps as executable assertions rather than prose comments — see
-docs/adr/0001 and docs/adr/0002. When those ADRs are accepted, these tests are expected to FAIL,
-and updating them is part of applying the ADR.
+The two spec gaps this file used to pin — see docs/adr/0001 and docs/adr/0002 — have since been
+accepted and applied. The assertions that recorded them are therefore inverted: they now assert
+those transitions exist, and fail if one is removed.
 """
 
 from __future__ import annotations
@@ -43,8 +43,11 @@ README_SPEC: frozenset[tuple[str, str]] = frozenset(
         ("PUBLISHING", "PUBLISHED"),
         ("PUBLISHING", "FAILED"),
         ("PUBLISHING", "STATUS_UNKNOWN"),
+        ("PUBLISHING", "REQUIRES_AUTHENTICATION"),
         ("FAILED", "PUBLISHING"),
         ("STATUS_UNKNOWN", "REQUIRES_USER_REVIEW"),
+        ("REQUIRES_USER_REVIEW", "PUBLISHING"),
+        ("REQUIRES_USER_REVIEW", "CANCELLED"),
     }
 )
 
@@ -152,12 +155,18 @@ def test_terminal_statuses_are_exactly_the_declared_ones(status: PublishingStatu
 
 
 def test_terminal_statuses_derivation() -> None:
+    """Two terminal by product design, one by ADR 0001.
+
+    PUBLISHED is done, CANCELLED is abandoned, and REQUIRES_AUTHENTICATION is terminal because
+    recovery is the connector flow rather than a transition of this post. REQUIRES_USER_REVIEW is
+    deliberately absent: ADR 0002 made it escapable, and if it reappears here that ADR has been
+    undone without anyone noticing.
+    """
     assert frozenset(
         {
             PublishingStatus.PUBLISHED,
             PublishingStatus.CANCELLED,
             PublishingStatus.REQUIRES_AUTHENTICATION,
-            PublishingStatus.REQUIRES_USER_REVIEW,
         }
     ) == TERMINAL_STATUSES
 
@@ -171,37 +180,55 @@ def test_table_is_immutable() -> None:
 
 
 # ======================================================================================
-# Spec gaps, recorded as executable assertions
+# The ADRs, applied — formerly spec gaps, now asserted as required behaviour
 #
-# These two tests assert the CURRENT (broken) behaviour so the gap cannot be forgotten. They are
-# expected to fail when ADR 0001 / ADR 0002 are accepted and applied; that failure is the reminder
-# to update them, and updating them is part of the ADR's implementation.
+# These tests used to assert the opposite: that REQUIRES_AUTHENTICATION had no inbound transition
+# and REQUIRES_USER_REVIEW had no outbound one. They were written that way so the gap could not be
+# forgotten, and so that applying an ADR required changing a test as well as a table. Both ADRs
+# have since been accepted and applied, which inverted them.
 # ======================================================================================
 
 
-def test_known_gap_requires_authentication_is_unreachable() -> None:
-    """GAP (docs/adr/0001): no transition leads to REQUIRES_AUTHENTICATION.
+def test_requires_authentication_is_reachable_from_publishing_only() -> None:
+    """ADR 0001: exactly one transition leads to REQUIRES_AUTHENTICATION.
 
-    README declares the status and architecture.md §2 defines a ``RequiresAuthentication`` publish
-    result mapping HTTP 401/403 to it — so error_classifier can produce an outcome the state
-    machine cannot record. Asserted here rather than fixed silently, because AGENTS.md §11 forbids
-    deviating from the spec without an accepted ADR.
+    "From publishing only" is the load-bearing half, and it is why this asserts an exact list
+    rather than mere non-emptiness. A second inbound transition — from FAILED, say — would keep a
+    weaker test passing while making the status reachable from a state whose meaning is "the
+    platform definitively rejected this", which is a different claim entirely.
     """
     inbound = [
         current
         for current, targets in ALLOWED_TRANSITIONS.items()
         if PublishingStatus.REQUIRES_AUTHENTICATION in targets
     ]
-    assert inbound == [], "ADR 0001 appears to have been applied; update this test"
+    assert inbound == [PublishingStatus.PUBLISHING], (
+        f"expected exactly PUBLISHING to lead to REQUIRES_AUTHENTICATION, found {inbound}"
+    )
 
 
-def test_known_gap_requires_user_review_is_a_dead_end() -> None:
-    """GAP (docs/adr/0002): no transition leaves REQUIRES_USER_REVIEW.
+def test_requires_authentication_stays_terminal() -> None:
+    """ADR 0001 leaves no exit, deliberately.
 
-    STATUS_UNKNOWN → REQUIRES_USER_REVIEW exists, so a post reaches human review — but nothing
-    leaves it, which makes README's own "Failure workflow" (review, then retry) unreachable in the
-    state machine.
+    Recovering from an expired connection is the connector flow — the user reconnects the account —
+    not a transition of this post. If that judgement is ever reversed it needs its own ADR, and
+    this test is where the reversal has to be acknowledged.
     """
-    assert allowed_targets(PublishingStatus.REQUIRES_USER_REVIEW) == frozenset(), (
-        "ADR 0002 appears to have been applied; update this test"
+    assert allowed_targets(PublishingStatus.REQUIRES_AUTHENTICATION) == frozenset()
+
+
+def test_requires_user_review_exits_are_exactly_the_two_permitted_ones() -> None:
+    """ADR 0002: review is escapable, but only those two ways.
+
+    ``→ PUBLISHING`` is the manual retry README's "Failure workflow" describes; ``→ CANCELLED`` is
+    the user abandoning a post they no longer want. An exact set, not a superset: an extra target
+    would be a route out of review that nobody decided on.
+
+    Note what this test cannot check. Both transitions are required to be user-initiated, and the
+    state machine has no way to express that — it is the caller's obligation, discharged by the
+    permission check and audit write on the API route. Nothing here prevents a background job from
+    calling them, which is why the transition table carries the warning instead.
+    """
+    assert allowed_targets(PublishingStatus.REQUIRES_USER_REVIEW) == frozenset(
+        {PublishingStatus.PUBLISHING, PublishingStatus.CANCELLED}
     )

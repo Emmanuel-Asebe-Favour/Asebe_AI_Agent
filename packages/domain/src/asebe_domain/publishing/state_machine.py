@@ -4,20 +4,21 @@ AGENTS.md §8 forbids writing a status transition anywhere else, and README's "A
 transitions" block is the spec. The table below is a literal transcription of that block — no
 transition is present here that is absent there, and none is missing.
 
-The two gaps in the spec are transcribed faithfully rather than quietly fixed. AGENTS.md §11 is
-explicit that a rule believed wrong must be raised via an ADR, not silently deviated from:
+Two gaps in the original spec were raised as ADRs rather than silently fixed, per AGENTS.md §11,
+and both have since been accepted and applied here:
 
-1. ``REQUIRES_AUTHENTICATION`` is a declared status with **no transition into it**, even though
-   architecture.md §2 defines a ``RequiresAuthentication`` publish *result* and maps HTTP 401/403
-   to it. The classifier can therefore produce an outcome the state machine cannot record.
-   See docs/adr/0001.
+1. ``REQUIRES_AUTHENTICATION`` had **no transition into it**, even though architecture.md §2 defines
+   a ``RequiresAuthentication`` publish *result* and §3 maps HTTP 401/403 onto it — so the
+   classifier could produce an outcome the state machine had no way to record. ADR 0001 added
+   ``PUBLISHING → REQUIRES_AUTHENTICATION``. The status stays terminal: recovering from an expired
+   connection is the *connector* flow, which reconnects the account, not a transition of this post.
 
-2. ``REQUIRES_USER_REVIEW`` has **no transition out of it**, which makes README's own
-   "Failure workflow" (review, then retry) unreachable in the state machine.
-   See docs/adr/0002.
+2. ``REQUIRES_USER_REVIEW`` had **no transition out of it**, which made README's own "Failure
+   workflow" (review, then retry) unreachable. ADR 0002 added two user-initiated exits,
+   ``REQUIRES_USER_REVIEW → PUBLISHING`` and ``→ CANCELLED``.
 
-Both are asserted as-is by tests/publishing/test_state_machine.py, so the gap exists in executable
-form rather than only in prose, and closing it will require changing a test as well as a table.
+Both are covered by tests/publishing/test_state_machine.py, whose ``README_SPEC`` is a hand-copied
+second encoding of the README block — so the table and the spec cannot drift apart silently.
 
 This module is pure: it decides legality and returns the resulting status. Persisting the change is
 the infrastructure layer's job — see the transactional boundary in architecture.md §4.
@@ -39,8 +40,11 @@ from asebe_domain.publishing.status import PublishingStatus
 #   PUBLISHING → PUBLISHED
 #   PUBLISHING → FAILED
 #   PUBLISHING → STATUS_UNKNOWN
+#   PUBLISHING → REQUIRES_AUTHENTICATION   (ADR 0001)
 #   FAILED → PUBLISHING
 #   STATUS_UNKNOWN → REQUIRES_USER_REVIEW
+#   REQUIRES_USER_REVIEW → PUBLISHING      (ADR 0002)
+#   REQUIRES_USER_REVIEW → CANCELLED       (ADR 0002)
 #
 # MappingProxyType makes this read-only at runtime: a caller cannot add a transition by mutating
 # the table, which would be the one way to bypass the "only place transition rules exist" rule.
@@ -57,19 +61,29 @@ ALLOWED_TRANSITIONS: Mapping[PublishingStatus, frozenset[PublishingStatus]] = Ma
                 PublishingStatus.PUBLISHED,
                 PublishingStatus.FAILED,
                 PublishingStatus.STATUS_UNKNOWN,
+                PublishingStatus.REQUIRES_AUTHENTICATION,
             }
         ),
         PublishingStatus.FAILED: frozenset({PublishingStatus.PUBLISHING}),
         PublishingStatus.STATUS_UNKNOWN: frozenset({PublishingStatus.REQUIRES_USER_REVIEW}),
-        # Terminals, and the two spec gaps. Listed explicitly rather than omitted, so that
-        # "this status appears in the table" and "this status has somewhere to go" are
-        # distinguishable at a glance.
+        # ADR 0002. Both exits are user-initiated: the manual retry README's "Failure workflow"
+        # describes, and the user abandoning a post they no longer want. The state machine cannot
+        # express "a human decided this" -- that obligation is discharged by the permission check
+        # and audit write on the API route. Nothing in a background job may call these: an
+        # automatic retry from review is exactly the duplicate-post hazard R3 forbids.
+        PublishingStatus.REQUIRES_USER_REVIEW: frozenset(
+            {PublishingStatus.PUBLISHING, PublishingStatus.CANCELLED}
+        ),
+        # Terminals. Listed explicitly rather than omitted, so that "this status appears in the
+        # table" and "this status has somewhere to go" are distinguishable at a glance.
+        # REQUIRES_AUTHENTICATION is terminal by decision (ADR 0001): the user reconnects the
+        # account, which is the connector flow, not a transition of this post.
         PublishingStatus.PUBLISHED: frozenset(),
         PublishingStatus.CANCELLED: frozenset(),
-        PublishingStatus.REQUIRES_AUTHENTICATION: frozenset(),  # gap: nothing leads here
-        PublishingStatus.REQUIRES_USER_REVIEW: frozenset(),  # gap: nothing leads out
+        PublishingStatus.REQUIRES_AUTHENTICATION: frozenset(),
     }
 )
+
 
 def _derive_terminal_statuses() -> frozenset[PublishingStatus]:
     """Statuses from which no transition is permitted. Derived, never hand-maintained.

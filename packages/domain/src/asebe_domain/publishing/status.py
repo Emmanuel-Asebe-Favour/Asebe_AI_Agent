@@ -17,9 +17,9 @@ class PublishingStatus(StrEnum):
     persisted status of a post whose publish outcome we could not determine, and the prefix keeps
     it visibly distinct from the ``Unknown`` *result* in results.py at every call site.
 
-    ``REQUIRES_AUTHENTICATION`` and ``REQUIRES_USER_REVIEW`` currently have no inbound and no
-    outbound transitions respectively. Those are spec gaps, not oversights here — see
-    docs/adr/0001 and docs/adr/0002, and the assertions recording them in
+    ``REQUIRES_AUTHENTICATION`` and ``REQUIRES_USER_REVIEW`` began as spec gaps — no inbound and no
+    outbound transition respectively. ADRs 0001 and 0002 resolved both and have since been applied,
+    so each now has exactly the transitions its ADR added, asserted in
     tests/publishing/test_state_machine.py.
     """
 

@@ -1,6 +1,6 @@
 # ADR 0001 — Add `PUBLISHING → REQUIRES_AUTHENTICATION`
 
-- **Status:** Proposed — not accepted. No code depends on this yet.
+- **Status:** Accepted — applied 2026-09-11.
 - **Date:** 2026-09-10
 - **Supersedes:** nothing
 - **Affects:** README "Allowed state transitions", `packages/domain/publishing/state_machine.py`
@@ -93,9 +93,11 @@ response body and never in the database cannot survive a page reload.
 
 - One new row in the transition table, and one line added to the README spec block in the same
   commit (§7 requires the README be updated when the table changes).
-- The exhaustive test in `test_state_machine.py` grows to assert the new pair legal, and
-  `test_known_gap_requires_authentication_is_unreachable` must be **inverted** — it becomes
-  `test_requires_authentication_is_reachable`, asserting exactly one inbound transition.
+- The exhaustive test in `test_state_machine.py` grew to assert the new pair legal, and
+  `test_known_gap_requires_authentication_is_unreachable` was **inverted** into
+  `test_requires_authentication_is_reachable_from_publishing_only`, which asserts exactly one
+  inbound transition and that it comes from `PUBLISHING`. A companion test,
+  `test_requires_authentication_stays_terminal`, pins the no-exit decision below.
 - Any UI rendering status must handle the case. Because the status enum is generated into the
   contract, TypeScript will fail to compile on an unhandled case, which is the intended behaviour
   (`AGENTS.md` §7).

@@ -1,6 +1,6 @@
 # ADR 0002 — Allow `REQUIRES_USER_REVIEW` to leave review
 
-- **Status:** Proposed — not accepted. No code depends on this yet.
+- **Status:** Accepted — applied 2026-09-11.
 - **Date:** 2026-09-10
 - **Supersedes:** nothing
 - **Affects:** README "Allowed state transitions", `packages/domain/publishing/state_machine.py`
@@ -81,8 +81,9 @@ route, and it is the reason these two transitions should not be reachable from a
 - Two new rows in the transition table; README's spec block updated in the same commit (§7).
 - `REQUIRES_USER_REVIEW` stops being terminal. `TERMINAL_STATUSES` shrinks to three:
   `PUBLISHED`, `CANCELLED`, `REQUIRES_AUTHENTICATION`.
-- `test_known_gap_requires_user_review_is_a_dead_end` must be inverted to assert the two permitted
-  targets and no others.
+- `test_known_gap_requires_user_review_is_a_dead_end` was inverted into
+  `test_requires_user_review_exits_are_exactly_the_two_permitted_ones`, which asserts the two
+  permitted targets and no others.
 - The retry from review must carry a **new** idempotency key attempt number
   (`idempotency.generate(key, attempt_number + 1)`), because a new attempt is being made. Reusing
   the original key would make the platform treat it as the same request it may have already

@@ -64,6 +64,15 @@ ignore = []
 # you have not identified it yet.
 banned-module-level-imports = ["utils", "helpers", "common", "misc"]
 
+[tool.ruff.lint.isort]
+# Ruff finds first-party packages by looking for them under the roots in `src`, which this file
+# sets to ["apps", "packages"]. These packages use a src-layout, so the importable package sits one
+# level below that — `packages/domain/src/asebe_domain` — and ruff sees `domain`, not
+# `asebe_domain`. The result was that every `asebe_*` import sorted as third-party and landed after
+# pydantic. Listed explicitly rather than as a glob because pattern support for this setting varies
+# across ruff versions and a silently-ignored pattern would look like it was working.
+known-first-party = ["asebe_api", "asebe_domain", "asebe_infrastructure", "asebe_worker"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
