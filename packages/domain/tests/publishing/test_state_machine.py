@@ -22,6 +22,7 @@ from __future__ import annotations
 import itertools
 
 import pytest
+
 from asebe_domain.publishing.state_machine import (
     ALLOWED_TRANSITIONS,
     TERMINAL_STATUSES,
@@ -56,7 +57,8 @@ ALL_PAIRS = tuple(itertools.product(ALL_STATUSES, repeat=2))
 
 # Terminal statuses in enum declaration order, for stable parametrize IDs.
 #
-# Derived by filtering the enum rather than by sorting TERMINAL_STATUSES. ``sorted(TERMINAL_STATUSES,
+# Derived by filtering the enum rather than by sorting TERMINAL_STATUSES.
+# ``sorted(TERMINAL_STATUSES,
 # key=...)`` does NOT type-check here: mypy reports the key as ``Callable[[PublishingStatus], str]``
 # against an expected ``Callable[[object], ...]``, meaning it fails to solve sorted()'s type
 # variable from ``frozenset[PublishingStatus]`` and falls back to that variable's ``object`` bound.
@@ -162,13 +164,16 @@ def test_terminal_statuses_derivation() -> None:
     deliberately absent: ADR 0002 made it escapable, and if it reappears here that ADR has been
     undone without anyone noticing.
     """
-    assert frozenset(
-        {
-            PublishingStatus.PUBLISHED,
-            PublishingStatus.CANCELLED,
-            PublishingStatus.REQUIRES_AUTHENTICATION,
-        }
-    ) == TERMINAL_STATUSES
+    assert (
+        frozenset(
+            {
+                PublishingStatus.PUBLISHED,
+                PublishingStatus.CANCELLED,
+                PublishingStatus.REQUIRES_AUTHENTICATION,
+            }
+        )
+        == TERMINAL_STATUSES
+    )
 
 
 def test_table_is_immutable() -> None:

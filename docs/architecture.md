@@ -25,28 +25,36 @@ Rules that depend on developer discipline decay. Rules enforced by the compiler 
 ```python
 # packages/domain/publishing/results.py
 
+
 class Published(BaseModel):
     """A publish we can prove happened."""
+
     model_config = ConfigDict(frozen=True)
-    platform_post_id: str          # <- required. no default. no Optional.
+    platform_post_id: str  # <- required. no default. no Optional.
     published_at: datetime
     raw_response: dict[str, Any]
 
+
 class Failed(BaseModel):
     """The platform definitively rejected this. It did not publish."""
+
     model_config = ConfigDict(frozen=True)
     error_class: ErrorClass
     message: str
 
+
 class Unknown(BaseModel):
     """We do not know whether the platform published this."""
+
     model_config = ConfigDict(frozen=True)
     reason: str
     raw_response: dict[str, Any] | None
 
+
 class RequiresAuthentication(BaseModel):
     model_config = ConfigDict(frozen=True)
     platform: str
+
 
 PublishResult = Published | Failed | Unknown | RequiresAuthentication
 ```
@@ -88,7 +96,7 @@ def decide(result: PublishResult, attempt_count: int) -> RetryDecision:
         case Failed(error_class=ErrorClass.TEMPORARY) if attempt_count < 2:
             return RetryDecision.RETRY_ONCE
         case Unknown():
-            return RetryDecision.REQUIRE_REVIEW      # R3 — unconditional
+            return RetryDecision.REQUIRE_REVIEW  # R3 — unconditional
         case _:
             return RetryDecision.REQUIRE_REVIEW
 ```
@@ -100,12 +108,12 @@ No `default` arm that returns `RETRY_ONCE`. Ever.
 State change and job creation must be atomic. This is why the queue is Postgres-backed.
 
 ```python
-async with uow.begin() as tx:                    # one transaction
+async with uow.begin() as tx:  # one transaction
     post.status = PublishingStatus.PUBLISHING
-    post.idempotency_key = idempotency_service.generate(post)   # R6
-    attempt = publishing_attempts.start(post)                    # R7
+    post.idempotency_key = idempotency_service.generate(post)  # R6
+    attempt = publishing_attempts.start(post)  # R7
     if post.scheduled_at:
-        publish_task.configure(connection=tx.conn).defer(...)    # R9
+        publish_task.configure(connection=tx.conn).defer(...)  # R9
     await repo.save(post, conn=tx.conn)
 # commit — state and job become visible together, or neither does
 ```

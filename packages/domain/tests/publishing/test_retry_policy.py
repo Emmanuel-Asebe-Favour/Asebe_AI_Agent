@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+
 from asebe_domain.publishing.results import (
     ErrorClass,
     Failed,
@@ -113,9 +114,7 @@ def test_at_most_one_retry_decision_across_all_attempt_counts(result: PublishRes
     example-based test at a single attempt count would not.
     """
     retryable = [
-        n
-        for n in range(1, 50)
-        if decide(result, attempt_count=n) is RetryDecision.RETRY_ONCE
+        n for n in range(1, 50) if decide(result, attempt_count=n) is RetryDecision.RETRY_ONCE
     ]
     assert len(retryable) <= 1
 
@@ -162,9 +161,7 @@ def test_every_non_temporary_error_class_is_never_retried(error_class: ErrorClas
     ids=lambda r: type(r).__name__,
 )
 @pytest.mark.parametrize("attempt_count", (1, 2, 3))
-def test_every_union_member_produces_a_decision(
-    result: PublishResult, attempt_count: int
-) -> None:
+def test_every_union_member_produces_a_decision(result: PublishResult, attempt_count: int) -> None:
     """Every member of the closed union is handled — nothing falls through ``assert_never``."""
     assert decide(result, attempt_count=attempt_count) in set(RetryDecision)
 

@@ -14,6 +14,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import BaseModel, ValidationError
+
 from asebe_domain.publishing.results import (
     ErrorClass,
     Failed,
@@ -21,7 +23,6 @@ from asebe_domain.publishing.results import (
     RequiresAuthentication,
     Unknown,
 )
-from pydantic import BaseModel, ValidationError
 
 NOW = datetime(2026, 9, 10, 12, 0, tzinfo=UTC)
 UNION_MEMBERS = (Published, Failed, Unknown, RequiresAuthentication)

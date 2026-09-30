@@ -12,6 +12,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+
 from asebe_domain.publishing.idempotency import generate
 
 
@@ -64,9 +65,7 @@ def test_namespace_constant_has_not_changed() -> None:
     """The literal itself, asserted directly so the previous test cannot drift with it."""
     from asebe_domain.publishing import idempotency
 
-    assert uuid.UUID(
-        "6f1c4a2e-0d3b-4f7a-9c58-2b8e5d1a7f30"
-    ) == idempotency._IDEMPOTENCY_NAMESPACE
+    assert uuid.UUID("6f1c4a2e-0d3b-4f7a-9c58-2b8e5d1a7f30") == idempotency._IDEMPOTENCY_NAMESPACE
 
 
 def test_empty_post_key_is_rejected() -> None:
