@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+
 from asebe_domain.publishing.error_classifier import (
     ParsedPlatformResponse,
     PlatformErrorBody,
@@ -71,9 +72,7 @@ def test_connection_error_yields_unknown() -> None:
     assert isinstance(result, Unknown)
 
 
-@pytest.mark.parametrize(
-    "outcome", [TransportOutcome.TIMEOUT, TransportOutcome.CONNECTION_ERROR]
-)
+@pytest.mark.parametrize("outcome", [TransportOutcome.TIMEOUT, TransportOutcome.CONNECTION_ERROR])
 def test_transport_failures_are_never_temporary(outcome: TransportOutcome) -> None:
     """A transport failure must never be classified as retryable — it might already have landed."""
     result = run(outcome)
@@ -224,9 +223,9 @@ def test_temporary_is_reachable_only_from_the_two_sanctioned_rows(status_code: i
     for error in (None, SOME_ERROR):
         result = run(TransportOutcome.RESPONSE, parsed(status_code, error=error))
         if isinstance(result, Failed) and result.error_class is ErrorClass.TEMPORARY:
-            assert status_code == 429 or (
-                500 <= status_code < 600 and error is not None
-            ), f"status {status_code} (error={error is not None}) must not be retryable"
+            assert status_code == 429 or (500 <= status_code < 600 and error is not None), (
+                f"status {status_code} (error={error is not None}) must not be retryable"
+            )
 
 
 @pytest.mark.parametrize("status_code", range(100, 600))
@@ -256,8 +255,6 @@ def test_raw_payload_claiming_success_does_not_override_a_server_error() -> None
 
 def test_raw_payload_claiming_failure_does_not_override_a_valid_publish() -> None:
     """And the converse: raw must not downgrade a genuine, proven publish."""
-    misleading = parsed(
-        200, platform_post_id="p-9", raw={"error": "failed", "ok": False}
-    )
+    misleading = parsed(200, platform_post_id="p-9", raw={"error": "failed", "ok": False})
     result = run(TransportOutcome.RESPONSE, misleading)
     assert isinstance(result, Published)

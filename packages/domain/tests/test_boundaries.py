@@ -163,11 +163,7 @@ def test_domain_declares_no_framework_dependencies_anywhere() -> None:
 
 def test_no_generic_utility_modules() -> None:
     """AGENTS.md §5: "If you cannot name it, you have not identified the responsibility yet." """
-    offenders = [
-        path.name
-        for path in _python_files()
-        if path.stem in FORBIDDEN_MODULE_NAMES
-    ]
+    offenders = [path.name for path in _python_files() if path.stem in FORBIDDEN_MODULE_NAMES]
     assert not offenders, f"forbidden generic module names: {offenders}"
 
 

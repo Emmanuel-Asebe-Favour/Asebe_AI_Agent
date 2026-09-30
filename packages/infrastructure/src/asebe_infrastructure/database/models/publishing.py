@@ -18,7 +18,6 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from asebe_domain.publishing.status import PublishingStatus
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
@@ -32,6 +31,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from asebe_domain.publishing.status import PublishingStatus
 from asebe_infrastructure.database.base import Base, Timestamps, UuidPrimaryKey
 
 # The nine statuses rendered as a SQL IN-list, derived from the enum rather than spelled out. A
@@ -104,10 +104,13 @@ class PlatformPost(UuidPrimaryKey, Timestamps, Base):
 
     status: Mapped[PublishingStatus] = mapped_column(
         # Stored as its string value, not a PostgreSQL enum type. A native enum would make adding a
-        # status an `ALTER TYPE ... ADD VALUE`, which takes a lock and — historically — could not run
+        # status an `ALTER TYPE ... ADD VALUE`, which takes a lock and — historically —
+        # could not run
         # inside a transaction block. The check constraint in __table_args__ gives the same
         # protection for the cost of an ordinary constraint swap, which is cheaper to migrate.
-        String(64), nullable=False, default=PublishingStatus.DRAFT
+        String(64),
+        nullable=False,
+        default=PublishingStatus.DRAFT,
     )
 
     # --- The reliability columns -------------------------------------------------------

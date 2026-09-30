@@ -17,6 +17,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError
+
 from asebe_domain.adapters.protocol import (
     AnalyticsResult,
     ConnectInput,
@@ -32,7 +34,6 @@ from asebe_domain.adapters.protocol import (
     VerificationResult,
 )
 from asebe_domain.publishing.results import Unknown
-from pydantic import ValidationError
 
 NOW = datetime(2026, 9, 10, 12, 0, tzinfo=UTC)
 
