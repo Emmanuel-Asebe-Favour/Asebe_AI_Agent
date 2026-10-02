@@ -11,5 +11,6 @@ from asebe_infrastructure.database.models.publishing import (
     PlatformPost,
     PublishingAttempt,
 )
+from asebe_infrastructure.database.models.users import User
 
-__all__ = ["ContentItem", "PlatformPost", "PublishingAttempt"]
+__all__ = ["ContentItem", "PlatformPost", "PublishingAttempt", "User"]
