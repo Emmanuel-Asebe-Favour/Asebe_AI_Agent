@@ -105,6 +105,23 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+async def load_post_locked(session: AsyncSession, platform_post_id: uuid.UUID) -> PlatformPost:
+    """Load a post and its content item, locking the post row until the transaction ends.
+
+    FOR UPDATE: a second worker asking to act on the same post waits here, then sees the status the
+    first one left behind and is judged by the state machine — one request, not two.
+    """
+    post = await session.scalar(
+        select(PlatformPost)
+        .where(PlatformPost.id == platform_post_id)
+        .options(selectinload(PlatformPost.content_item))
+        .with_for_update(of=PlatformPost)
+    )
+    if post is None:
+        raise PlatformPostNotFoundError(str(platform_post_id))
+    return post
+
+
 class PublishOrchestrator:
     def __init__(
         self,
@@ -127,7 +144,7 @@ class PublishOrchestrator:
 
     async def begin(self, session: AsyncSession, platform_post_id: uuid.UUID) -> BeginResult:
         """Step 1. Every check runs before any write, so a refusal leaves no trace."""
-        post = await self._load_locked(session, platform_post_id)
+        post = await load_post_locked(session, platform_post_id)
         content = post.content_item
 
         if content.is_demo:
@@ -179,7 +196,7 @@ class PublishOrchestrator:
         self, session: AsyncSession, begun: BeginResult, result: PublishResult
     ) -> PublishOutcome:
         """Step 3. Record the attempt's outcome and move the post, in one transaction."""
-        post = await self._load_locked(session, uuid.UUID(begun.publish_input.platform_post_key))
+        post = await load_post_locked(session, uuid.UUID(begun.publish_input.platform_post_key))
         attempt = await session.get(PublishingAttempt, begun.attempt_id)
         if attempt is None:  # pragma: no cover - begin() just wrote it
             raise LookupError(str(begun.attempt_id))
@@ -216,20 +233,6 @@ class PublishOrchestrator:
             attempt_number=attempt.attempt_number,
         )
 
-    @staticmethod
-    async def _load_locked(session: AsyncSession, platform_post_id: uuid.UUID) -> PlatformPost:
-        # FOR UPDATE: a second worker asking to publish the same post waits here, then finds the
-        # status already PUBLISHING and is refused by the state machine — one request, not two.
-        post = await session.scalar(
-            select(PlatformPost)
-            .where(PlatformPost.id == platform_post_id)
-            .options(selectinload(PlatformPost.content_item))
-            .with_for_update(of=PlatformPost)
-        )
-        if post is None:
-            raise PlatformPostNotFoundError(str(platform_post_id))
-        return post
-
 
 __all__ = [
     "BeginResult",
@@ -241,4 +244,5 @@ __all__ = [
     "PublishOutcome",
     "Publisher",
     "TransactionFactory",
+    "load_post_locked",
 ]

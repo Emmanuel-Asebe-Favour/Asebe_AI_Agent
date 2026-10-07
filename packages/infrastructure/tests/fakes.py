@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from asebe_domain.adapters.protocol import PublishPostInput
+from asebe_domain.adapters.protocol import PublishPostInput, VerificationResult
 from asebe_domain.publishing.results import PublishResult
 
 START = datetime(2026, 10, 5, 12, 0, tzinfo=UTC)
@@ -49,3 +49,20 @@ def same_session(session: AsyncSession):  # type: ignore[no-untyped-def]
         yield session
 
     return _tx
+
+
+class FakeVerifier:
+    """Returns (or raises) the scripted verification answers, and remembers every question."""
+
+    def __init__(self, *outcomes: VerificationResult | Exception) -> None:
+        self._outcomes = list(outcomes)
+        self.calls: list[tuple[str, str]] = []
+
+    async def verify_post(
+        self, *, platform_post_key: str, idempotency_key: str
+    ) -> VerificationResult:
+        self.calls.append((platform_post_key, idempotency_key))
+        outcome = self._outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
