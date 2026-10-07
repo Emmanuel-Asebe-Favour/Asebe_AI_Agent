@@ -10,14 +10,28 @@ from asebe_infrastructure.publishing.orchestrator import (
     PublishOutcome,
 )
 from asebe_infrastructure.publishing.recovery import recover_interrupted_publishes
+from asebe_infrastructure.publishing.verification import (
+    NotAwaitingVerificationError,
+    NoVerifierError,
+    PostVerifier,
+    VerificationLookup,
+    VerificationReport,
+    Verifier,
+)
 
 __all__ = [
     "BeginResult",
     "ContentNotPublishableError",
     "DemoContentBlockedError",
     "NoPublisherError",
+    "NoVerifierError",
+    "NotAwaitingVerificationError",
+    "PostVerifier",
     "PublishOrchestrator",
     "PublishOutcome",
     "Publisher",
+    "VerificationLookup",
+    "VerificationReport",
+    "Verifier",
     "recover_interrupted_publishes",
 ]
