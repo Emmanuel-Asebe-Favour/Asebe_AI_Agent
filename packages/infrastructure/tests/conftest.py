@@ -11,11 +11,12 @@ without a database stays green.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from asebe_domain.publishing.status import PublishingStatus
 from asebe_infrastructure.database.models import ContentItem, PlatformPost, User
 from asebe_infrastructure.database.session import create_engine
 from asebe_infrastructure.database.settings import get_database_url
@@ -60,3 +61,44 @@ async def platform_post(session: AsyncSession) -> PlatformPost:
     session.add(post)
     await session.flush()
     return post
+
+
+@pytest.fixture
+def make_post(session: AsyncSession) -> Callable[..., Awaitable[PlatformPost]]:
+    """Build a platform post with the fields a publish needs; override any to test a refusal."""
+
+    async def _make(
+        *,
+        is_demo: bool = False,
+        media_url: str | None = "https://example.invalid/clip.mp4",
+        media_type: str | None = "video/mp4",
+        caption: str | None = "Shared caption",
+        platform_caption: str | None = None,
+        platform: str = "platform-1",
+        status: PublishingStatus = PublishingStatus.DRAFT,
+    ) -> PlatformPost:
+        user = User(email=f"test-{uuid.uuid4()}@example.invalid")
+        session.add(user)
+        await session.flush()
+        item = ContentItem(
+            user_id=user.id,
+            title="A test post",
+            media_url=media_url,
+            media_type=media_type,
+            caption=caption,
+            is_demo=is_demo,
+        )
+        session.add(item)
+        await session.flush()
+        post = PlatformPost(
+            content_item_id=item.id,
+            user_id=user.id,
+            platform=platform,
+            platform_caption=platform_caption,
+            status=status,
+        )
+        session.add(post)
+        await session.flush()
+        return post
+
+    return _make
