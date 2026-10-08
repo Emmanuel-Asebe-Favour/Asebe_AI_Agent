@@ -26,9 +26,10 @@ from asebe_domain.publishing.results import Unknown
 from asebe_domain.publishing.state_machine import transition
 from asebe_domain.publishing.status import PublishingStatus
 from asebe_infrastructure.database.models import PlatformPost, PublishingAttempt
-from asebe_infrastructure.repositories import PublishingAttemptRepository
+from asebe_infrastructure.repositories import Actor, AuditLogRepository, PublishingAttemptRepository
 
 INTERRUPTED_REASON = "publish was interrupted before an outcome was recorded"
+AUDIT_ACTION = "publishing.interrupted_recovered"
 
 
 async def recover_interrupted_publishes(
@@ -37,6 +38,7 @@ async def recover_interrupted_publishes(
     """Move stuck PUBLISHING posts to STATUS_UNKNOWN. Returns how many were recovered."""
     cutoff = now - older_than
     repo = PublishingAttemptRepository(session)
+    audit = AuditLogRepository(session)
 
     # SKIP LOCKED: if another worker holds a post right now, it is by definition not stuck, and
     # waiting for it would stall recovery behind a healthy publish.
@@ -63,12 +65,24 @@ async def recover_interrupted_publishes(
         if attempt is None:
             continue
         await repo.finish(attempt, Unknown(reason=INTERRUPTED_REASON), now=now)
-        post.status = transition(PublishingStatus(post.status), PublishingStatus.STATUS_UNKNOWN)
+        previous = PublishingStatus(post.status)
+        post.status = transition(previous, PublishingStatus.STATUS_UNKNOWN)
         post.last_error = INTERRUPTED_REASON
+        # A post changing status with nobody present is exactly what the audit log is for.
+        await audit.record(
+            actor=Actor.system(),
+            action=AUDIT_ACTION,
+            resource_type="platform_post",
+            resource_id=str(post.id),
+            previous_state={"status": previous.value},
+            new_state={"status": PublishingStatus.STATUS_UNKNOWN.value},
+            detail={"attempt_number": attempt.attempt_number},
+            now=now,
+        )
         recovered += 1
 
     await session.flush()
     return recovered
 
 
-__all__ = ["INTERRUPTED_REASON", "recover_interrupted_publishes"]
+__all__ = ["AUDIT_ACTION", "INTERRUPTED_REASON", "recover_interrupted_publishes"]

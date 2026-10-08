@@ -39,7 +39,7 @@ from asebe_infrastructure.publishing.orchestrator import (
     _utc_now,
     load_post_locked,
 )
-from asebe_infrastructure.repositories import PlatformPostNotFoundError
+from asebe_infrastructure.repositories import Actor, AuditLogRepository, PlatformPostNotFoundError
 
 
 class Verifier(Protocol):
@@ -57,6 +57,8 @@ class NotAwaitingVerificationError(RuntimeError):
 class NoVerifierError(LookupError):
     """No adapter is registered for this post's platform."""
 
+
+AUDIT_ACTION = "publishing.verification_applied"
 
 # What the creator is told. Fixed sentences, never the adapter's free text: an adapter's detail
 # string could echo something it should not, and R14 keeps credentials out of anything shown.
@@ -172,6 +174,22 @@ class PostVerifier:
                 assert_never(result.outcome)
 
         post.status = transition(PublishingStatus.STATUS_UNKNOWN, target)
+
+        # ADR 0003: a status that changes with no person present must be attributable. Written in
+        # this same transaction, so the change and its record exist together or not at all.
+        new_state: dict[str, str] = {"status": target.value}
+        if remote_id is not None:
+            new_state["platform_post_id"] = remote_id
+        await AuditLogRepository(session).record(
+            actor=Actor.system(),
+            action=AUDIT_ACTION,
+            resource_type="platform_post",
+            resource_id=str(post.id),
+            previous_state={"status": PublishingStatus.STATUS_UNKNOWN.value},
+            new_state=new_state,
+            detail={"verification_outcome": result.outcome.value},
+            now=self._clock(),
+        )
         await session.flush()
         return VerificationReport(
             outcome=result.outcome,
@@ -182,6 +200,7 @@ class PostVerifier:
 
 
 __all__ = [
+    "AUDIT_ACTION",
     "MESSAGE_ABSENT",
     "MESSAGE_INCONCLUSIVE",
     "MESSAGE_LIVE",
