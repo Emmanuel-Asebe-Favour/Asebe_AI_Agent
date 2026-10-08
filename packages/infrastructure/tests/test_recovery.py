@@ -6,11 +6,12 @@ from collections.abc import Awaitable, Callable
 from datetime import timedelta
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from asebe_domain.publishing.results import Unknown
 from asebe_domain.publishing.status import PublishingStatus
-from asebe_infrastructure.database.models import PlatformPost, PublishingAttempt
+from asebe_infrastructure.database.models import AuditLog, PlatformPost, PublishingAttempt
 from asebe_infrastructure.publishing import PublishOrchestrator, recover_interrupted_publishes
 
 from .fakes import START, FakePublisher, clock_from, same_session, ticking_clock
@@ -77,3 +78,25 @@ async def test_a_finished_publish_is_never_touched(
 
     assert post.status == PublishingStatus.STATUS_UNKNOWN
     assert post.last_error == reason_before  # recovery did not rewrite the real outcome
+
+
+async def test_a_recovery_is_recorded_as_a_system_action(
+    session: AsyncSession, make_post: MakePost
+) -> None:
+    post = await make_post()
+    await _crash_after_begin(session, post)
+
+    await recover_interrupted_publishes(session, now=START + timedelta(hours=1), older_than=GRACE)
+
+    rows = list(
+        await session.scalars(
+            select(AuditLog).where(
+                AuditLog.resource_type == "platform_post", AuditLog.resource_id == str(post.id)
+            )
+        )
+    )
+    assert len(rows) == 1
+    assert rows[0].actor_type == "system"
+    assert rows[0].action == "publishing.interrupted_recovered"
+    assert rows[0].previous_state == {"status": "PUBLISHING"}
+    assert rows[0].new_state == {"status": "STATUS_UNKNOWN"}

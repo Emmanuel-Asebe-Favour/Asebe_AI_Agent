@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from asebe_domain.adapters.protocol import VerificationOutcome, VerificationResult
 from asebe_domain.publishing.idempotency import generate
 from asebe_domain.publishing.status import PublishingStatus
-from asebe_infrastructure.database.models import PlatformPost, PublishingAttempt
+from asebe_infrastructure.database.models import AuditLog, PlatformPost, PublishingAttempt
 from asebe_infrastructure.publishing import (
     NotAwaitingVerificationError,
     NoVerifierError,
@@ -196,3 +196,54 @@ async def test_a_platform_with_no_verifier_is_refused_before_anything_changes(
 async def test_a_missing_post_is_reported_as_missing(session: AsyncSession) -> None:
     with pytest.raises(PlatformPostNotFoundError):
         await _verifier(session, FakeVerifier()).verify(uuid.uuid4())
+
+
+async def _audit_rows(session: AsyncSession, post: PlatformPost) -> list[AuditLog]:
+    rows = await session.scalars(
+        select(AuditLog).where(
+            AuditLog.resource_type == "platform_post", AuditLog.resource_id == str(post.id)
+        )
+    )
+    return list(rows)
+
+
+async def test_a_resolving_verification_leaves_an_attributable_record(
+    session: AsyncSession, make_post: MakePost
+) -> None:
+    post = await _unknown_post(make_post)
+    fake = FakeVerifier(
+        VerificationResult.confirmed_published(platform_post_id="remote-9", checked_at=START)
+    )
+
+    await _verifier(session, fake).verify(post.id)
+
+    (entry,) = await _audit_rows(session, post)
+    assert entry.actor_type == "system"  # ADR 0003: no person was present
+    assert entry.action == "publishing.verification_applied"
+    assert entry.previous_state == {"status": "STATUS_UNKNOWN"}
+    assert entry.new_state == {"status": "PUBLISHED", "platform_post_id": "remote-9"}
+    assert entry.detail == {"verification_outcome": "CONFIRMED_PUBLISHED"}
+
+
+async def test_an_inconclusive_verification_is_recorded_too(
+    session: AsyncSession, make_post: MakePost
+) -> None:
+    post = await _unknown_post(make_post)
+    fake = FakeVerifier(VerificationResult.unsupported())
+
+    await _verifier(session, fake).verify(post.id)
+
+    (entry,) = await _audit_rows(session, post)
+    assert entry.new_state == {"status": "REQUIRES_USER_REVIEW"}
+    assert entry.detail == {"verification_outcome": "UNSUPPORTED"}
+
+
+async def test_a_refused_verification_writes_nothing(
+    session: AsyncSession, make_post: MakePost
+) -> None:
+    post = await make_post(status=PublishingStatus.PUBLISHED)
+
+    with pytest.raises(NotAwaitingVerificationError):
+        await _verifier(session, FakeVerifier()).verify(post.id)
+
+    assert await _audit_rows(session, post) == []

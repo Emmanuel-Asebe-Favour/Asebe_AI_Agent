@@ -6,6 +6,7 @@ not imported is invisible to autogenerate, and the migration silently omits its 
 discovered later as a missing column in production.
 """
 
+from asebe_infrastructure.database.models.audit import AuditLog
 from asebe_infrastructure.database.models.publishing import (
     ContentItem,
     PlatformPost,
@@ -13,4 +14,4 @@ from asebe_infrastructure.database.models.publishing import (
 )
 from asebe_infrastructure.database.models.users import User
 
-__all__ = ["ContentItem", "PlatformPost", "PublishingAttempt", "User"]
+__all__ = ["AuditLog", "ContentItem", "PlatformPost", "PublishingAttempt", "User"]
