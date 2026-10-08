@@ -4,8 +4,8 @@ AGENTS.md §8 forbids writing a status transition anywhere else, and README's "A
 transitions" block is the spec. The table below is a literal transcription of that block — no
 transition is present here that is absent there, and none is missing.
 
-Two gaps in the original spec were raised as ADRs rather than silently fixed, per AGENTS.md §11,
-and both have since been accepted and applied here:
+Three gaps in the original spec were raised as ADRs rather than silently fixed, per AGENTS.md §11,
+and all have since been accepted and applied here:
 
 1. ``REQUIRES_AUTHENTICATION`` had **no transition into it**, even though architecture.md §2 defines
    a ``RequiresAuthentication`` publish *result* and §3 maps HTTP 401/403 onto it — so the
@@ -17,7 +17,11 @@ and both have since been accepted and applied here:
    workflow" (review, then retry) unreachable. ADR 0002 added two user-initiated exits,
    ``REQUIRES_USER_REVIEW → PUBLISHING`` and ``→ CANCELLED``.
 
-Both are covered by tests/publishing/test_state_machine.py, whose ``README_SPEC`` is a hand-copied
+3. ``STATUS_UNKNOWN`` had only one exit, to review, so a platform could prove a post was live
+   and the system had no legal way to record it. ADR 0003 added ``STATUS_UNKNOWN → PUBLISHED``
+   and ``→ FAILED``, each allowed only as the result of a confirming ``verify_post``.
+
+All are covered by tests/publishing/test_state_machine.py, whose ``README_SPEC`` is a hand-copied
 second encoding of the README block — so the table and the spec cannot drift apart silently.
 
 This module is pure: it decides legality and returns the resulting status. Persisting the change is
@@ -43,6 +47,8 @@ from asebe_domain.publishing.status import PublishingStatus
 #   PUBLISHING → REQUIRES_AUTHENTICATION   (ADR 0001)
 #   FAILED → PUBLISHING
 #   STATUS_UNKNOWN → REQUIRES_USER_REVIEW
+#   STATUS_UNKNOWN → PUBLISHED            (ADR 0003, confirmed verification only)
+#   STATUS_UNKNOWN → FAILED               (ADR 0003, confirmed verification only)
 #   REQUIRES_USER_REVIEW → PUBLISHING      (ADR 0002)
 #   REQUIRES_USER_REVIEW → CANCELLED       (ADR 0002)
 #
@@ -65,7 +71,18 @@ ALLOWED_TRANSITIONS: Mapping[PublishingStatus, frozenset[PublishingStatus]] = Ma
             }
         ),
         PublishingStatus.FAILED: frozenset({PublishingStatus.PUBLISHING}),
-        PublishingStatus.STATUS_UNKNOWN: frozenset({PublishingStatus.REQUIRES_USER_REVIEW}),
+        # ADR 0003. The exits to PUBLISHED and FAILED are for a *confirmed* verification only
+        # (VerificationResult.resolves_status). The table cannot see the evidence, so the
+        # caller -- PostVerifier -- is the one obliged to hold it. An inconclusive or
+        # unsupported result keeps the original exit to review. None of these is a retry:
+        # R3 still forbids retrying an unknown.
+        PublishingStatus.STATUS_UNKNOWN: frozenset(
+            {
+                PublishingStatus.REQUIRES_USER_REVIEW,
+                PublishingStatus.PUBLISHED,
+                PublishingStatus.FAILED,
+            }
+        ),
         # ADR 0002. Both exits are user-initiated: the manual retry README's "Failure workflow"
         # describes, and the user abandoning a post they no longer want. The state machine cannot
         # express "a human decided this" -- that obligation is discharged by the permission check

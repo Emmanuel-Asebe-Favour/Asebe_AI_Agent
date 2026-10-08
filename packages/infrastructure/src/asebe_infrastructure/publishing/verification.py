@@ -4,15 +4,16 @@ A post is in STATUS_UNKNOWN when we asked a platform to publish and never learne
 module asks the platform again — not to publish, only to *look* — using ``verify_post``. It never
 calls ``publish_post``, so it can never create a second copy (R3).
 
-THE GAP THIS MODULE WORKS AROUND — read docs/adr/0003 before changing it.
-The domain says a confirmed answer should settle the status: ``VerificationResult.resolves_status``
-maps CONFIRMED_PUBLISHED to PUBLISHED and CONFIRMED_ABSENT to FAILED, and architecture.md §5 says
-verification resolves Unknown "to Published or Failed". But the state machine, transcribed from
-README, only lets STATUS_UNKNOWN move to REQUIRES_USER_REVIEW. Both statements cannot be honoured.
-AGENTS.md §11 forbids quietly picking one, so until ADR 0003 is decided this module takes the only
-legal route for every outcome: the post goes to REQUIRES_USER_REVIEW, and the evidence is attached
-so the creator can act without guessing. ``resolves_status`` is deliberately not consulted here.
-When ADR 0003 is accepted, the change is confined to ``PostVerifier.apply``.
+WHAT A VERIFICATION DECIDES (ADR 0003, accepted)
+``VerificationResult.resolves_status`` is the single source of truth. A confirmed-published result
+settles the post as PUBLISHED, with the platform's own id (R1). A confirmed-absent result settles
+it as FAILED: the platform said the content was never created. Anything less than a confirmation
+-- inconclusive, or a platform that cannot be asked -- changes nothing about what we know, so the
+post goes to REQUIRES_USER_REVIEW for a human, exactly as before. None of these is a retry (R3): a
+FAILED reached this way is still only retried by the creator, deliberately.
+
+The state machine cannot see the evidence, so this module is the one that must hold it: it moves a
+post out of STATUS_UNKNOWN only because a ``VerificationResult`` says so.
 
 Like publishing, verification is split so the network call holds no database transaction:
 ``prepare`` (read), ask the platform, ``apply`` (write, re-checking the status first because
@@ -59,7 +60,7 @@ class NoVerifierError(LookupError):
 
 # What the creator is told. Fixed sentences, never the adapter's free text: an adapter's detail
 # string could echo something it should not, and R14 keeps credentials out of anything shown.
-MESSAGE_LIVE = "The platform shows this post is live (id {post_id}). Do not post it again."
+MESSAGE_LIVE = "Confirmed: the platform shows this post is live (id {post_id})."
 MESSAGE_ABSENT = "The platform confirms this post was not created. It is safe to try again."
 MESSAGE_INCONCLUSIVE = (
     "We could not tell whether this post went live. "
@@ -143,28 +144,34 @@ class PostVerifier:
         if PublishingStatus(post.status) is not PublishingStatus.STATUS_UNKNOWN:
             raise NotAwaitingVerificationError(f"{post.id} is now {post.status}")
 
+        # R8: the state machine still judges legality; resolves_status only chooses the target.
+        target = result.resolves_status or PublishingStatus.REQUIRES_USER_REVIEW
+
         remote_id: str | None = None
         match result.outcome:
             case VerificationOutcome.CONFIRMED_PUBLISHED:
                 remote_id = result.platform_post_id
                 if remote_id is None:  # pragma: no cover - the constructor forbids this (R1)
                     raise ValueError("a confirmed-published result must carry a platform id")
-                # Stored as evidence only. The status is NOT PUBLISHED: see the module docstring.
-                post.platform_post_id = remote_id
+                post.platform_post_id = remote_id  # R1: PUBLISHED always has the remote id
+                # The earliest moment we can prove the post existed. Not the moment it went live,
+                # which an unknown publish never told us.
+                post.published_at = result.checked_at
                 message = MESSAGE_LIVE.format(post_id=remote_id)
+                post.last_error = None
             case VerificationOutcome.CONFIRMED_ABSENT:
                 message = MESSAGE_ABSENT
+                post.last_error = message
             case VerificationOutcome.INCONCLUSIVE:
                 message = MESSAGE_INCONCLUSIVE
+                post.last_error = message
             case VerificationOutcome.UNSUPPORTED:
                 message = MESSAGE_UNSUPPORTED
+                post.last_error = message
             case _:
                 assert_never(result.outcome)
 
-        post.status = transition(
-            PublishingStatus.STATUS_UNKNOWN, PublishingStatus.REQUIRES_USER_REVIEW
-        )
-        post.last_error = message
+        post.status = transition(PublishingStatus.STATUS_UNKNOWN, target)
         await session.flush()
         return VerificationReport(
             outcome=result.outcome,
