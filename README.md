@@ -480,11 +480,17 @@ PUBLISHING → STATUS_UNKNOWN
 PUBLISHING → REQUIRES_AUTHENTICATION
 FAILED → PUBLISHING
 STATUS_UNKNOWN → REQUIRES_USER_REVIEW
+STATUS_UNKNOWN → PUBLISHED
+STATUS_UNKNOWN → FAILED
 REQUIRES_USER_REVIEW → PUBLISHING
 REQUIRES_USER_REVIEW → CANCELLED
 ```
 
 Invalid transitions such as `PUBLISHED → PUBLISHING` must be rejected by a centralized state machine.
+
+The two transitions leaving `STATUS_UNKNOWN` for `PUBLISHED` and `FAILED` are allowed only as the
+result of a verification that confirmed the outcome (ADR 0003). Neither is a retry. An inconclusive
+or unsupported verification still sends the post to `REQUIRES_USER_REVIEW`.
 
 The two transitions leaving `REQUIRES_USER_REVIEW` are user-initiated only — they are the manual
 retry described under "Failure workflow" and the user abandoning the post. Neither may be reached

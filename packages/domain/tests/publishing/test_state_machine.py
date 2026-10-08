@@ -47,6 +47,8 @@ README_SPEC: frozenset[tuple[str, str]] = frozenset(
         ("PUBLISHING", "REQUIRES_AUTHENTICATION"),
         ("FAILED", "PUBLISHING"),
         ("STATUS_UNKNOWN", "REQUIRES_USER_REVIEW"),
+        ("STATUS_UNKNOWN", "PUBLISHED"),
+        ("STATUS_UNKNOWN", "FAILED"),
         ("REQUIRES_USER_REVIEW", "PUBLISHING"),
         ("REQUIRES_USER_REVIEW", "CANCELLED"),
     }

@@ -1,6 +1,6 @@
 # ADR 0003 — Let a confirmed verification resolve `STATUS_UNKNOWN`
 
-- **Status:** Proposed — not yet applied. Needs the maintainer's decision.
+- **Status:** Accepted and applied, 2026-10-07 (maintainer decision).
 - **Date:** 2026-10-07
 - **Supersedes:** nothing
 - **Affects:** README "Allowed state transitions", `packages/domain/publishing/state_machine.py`,
@@ -37,7 +37,7 @@ way to record it. The post can only go to review — and from review the only ex
 to be published can never be shown as published. That is the same class of gap as ADR 0001 and
 ADR 0002, and `AGENTS.md` §11 says it must be decided, not worked around.
 
-## Decision (proposed)
+## Decision
 
 Add two transitions out of `STATUS_UNKNOWN`, each allowed only as the result of a verification:
 
@@ -80,8 +80,16 @@ claiming that without proof. The transitions above are allowed *only* with a con
 - An audit-log entry is required on both transitions (actor: system, evidence: the verification
   outcome), since a post's status changing without a user present must be attributable.
 
-## Until this is decided
+## Applied
 
-`PostVerifier` takes the only legal route for every outcome — review — attaches the evidence
-(including the remote id, when confirmed) to the post, and tells the creator in plain words what
-the platform said. No transition outside the current table is written anywhere.
+- `state_machine.py`: `STATUS_UNKNOWN` now has three exits; the spec block in README and the
+  hand-copied spec in `test_state_machine.py` were changed in the same commit.
+- `PostVerifier.apply` uses `VerificationResult.resolves_status` to choose the target; inconclusive
+  and unsupported results still go to review. Its tests were flipped accordingly.
+
+## Not yet done
+
+The audit-log entry required above cannot be written yet because there is no `audit_logs` table.
+Until it exists, a verification that resolves a post changes its status without leaving an
+attributable record. Creating that table is the first step of the administration work, and the two
+resolving transitions must write to it as soon as it does.

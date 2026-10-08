@@ -57,6 +57,7 @@ async def test_inconclusive_sends_the_post_to_review_with_a_plain_instruction(
     assert post.status == PublishingStatus.REQUIRES_USER_REVIEW
     assert post.last_error == MESSAGE_INCONCLUSIVE
     assert post.platform_post_id is None  # nothing was proven, so nothing is recorded
+    assert post.published_at is None
 
 
 async def test_a_platform_that_cannot_verify_is_honest_about_it(
@@ -72,7 +73,7 @@ async def test_a_platform_that_cannot_verify_is_honest_about_it(
     assert report.message == MESSAGE_UNSUPPORTED
 
 
-async def test_a_confirmed_live_post_is_flagged_do_not_repost_and_its_id_is_kept(
+async def test_a_confirmed_live_post_becomes_published_with_the_platforms_own_id(
     session: AsyncSession, make_post: MakePost
 ) -> None:
     post = await _unknown_post(make_post)
@@ -82,16 +83,16 @@ async def test_a_confirmed_live_post_is_flagged_do_not_repost_and_its_id_is_kept
 
     report = await _verifier(session, fake).verify(post.id)
 
+    assert report.status is PublishingStatus.PUBLISHED
     assert report.remote_post_id == "remote-77"
-    assert "Do not post it again" in report.message
     assert "remote-77" in report.message
-    assert post.platform_post_id == "remote-77"
-    # Interim behaviour, pending ADR 0003: the state machine has no STATUS_UNKNOWN -> PUBLISHED,
-    # so a confirmed post waits in review rather than being written as PUBLISHED by a side door.
-    assert post.status == PublishingStatus.REQUIRES_USER_REVIEW
+    assert post.status == PublishingStatus.PUBLISHED
+    assert post.platform_post_id == "remote-77"  # R1
+    assert post.published_at == START
+    assert post.last_error is None  # the doubt is resolved, so the old error is cleared
 
 
-async def test_a_confirmed_absent_post_tells_the_creator_it_is_safe_to_retry(
+async def test_a_confirmed_absent_post_becomes_failed_and_is_not_retried_automatically(
     session: AsyncSession, make_post: MakePost
 ) -> None:
     post = await _unknown_post(make_post)
@@ -101,9 +102,12 @@ async def test_a_confirmed_absent_post_tells_the_creator_it_is_safe_to_retry(
 
     report = await _verifier(session, fake).verify(post.id)
 
+    assert report.status is PublishingStatus.FAILED
     assert report.message == MESSAGE_ABSENT
-    assert post.status == PublishingStatus.REQUIRES_USER_REVIEW
+    assert post.status == PublishingStatus.FAILED
     assert post.platform_post_id is None
+    assert post.last_error == MESSAGE_ABSENT
+    assert len(fake.calls) == 1  # one look, and nothing was published
 
 
 async def test_the_platform_is_asked_once_with_this_posts_own_keys(
